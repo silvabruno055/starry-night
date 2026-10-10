@@ -1,0 +1,471 @@
+``` html
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A flickering light</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --sky-dark: #040814;
+            --sky-light: #151e3f;
+            --moon-glow: rgba(144, 192, 255, 0.15);
+            --candle-flame: #ff9d00;
+            --candle-glow: rgba(255, 140, 0, 0.4);
+            --window-frame: #07080a;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: var(--sky-dark);
+            overflow: hidden;
+            font-family: 'Cormorant Garamond', serif;
+            color: rgba(255, 255, 255, 0.85);
+        }
+
+        #sky-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+            filter: blur(1px); /* Creates the "hazy" effect */
+        }
+
+        /* Fog Overlay */
+        .fog {
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(to top, rgba(21, 30, 63, 0.8) 0%, rgba(4, 8, 20, 0) 60%);
+            z-index: 2;
+            pointer-events: none;
+        }
+
+        .window-container {
+            position: absolute;
+            inset: 0;
+            z-index: 10;
+            display: flex;
+            flex-direction: column;
+            pointer-events: none;
+            box-shadow: inset 0 0 150px rgba(0,0,0,0.9);
+        }
+
+        /* Frame borders */
+        .frame-top { height: 5vh; background: var(--window-frame); width: 100%; box-shadow: 0 10px 30px rgba(0,0,0,0.8); }
+        .frame-bottom { height: 12vh; background: linear-gradient(to bottom, #0a0c10, #030405); width: 100%; box-shadow: 0 -10px 30px rgba(0,0,0,0.8); position: absolute; bottom: 0; z-index: 20; border-top: 2px solid #1a1c23;}
+        .frame-left { width: 5vw; background: var(--window-frame); height: 100%; position: absolute; left: 0; }
+        .frame-right { width: 5vw; background: var(--window-frame); height: 100%; position: absolute; right: 0; }
+        
+        /* Window panes (crossbars) */
+        .mullion { width: 4vw; max-width: 30px; background: var(--window-frame); height: 100%; position: absolute; left: 50%; transform: translateX(-50%); box-shadow: 0 0 20px rgba(0,0,0,0.9); }
+        .transom { height: 4vh; max-height: 30px; background: var(--window-frame); width: 100%; position: absolute; top: 40%; transform: translateY(-50%); box-shadow: 0 0 20px rgba(0,0,0,0.9); }
+
+        .sill-content {
+            position: absolute;
+            bottom: 12vh; /* Just above the bottom frame */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100%;
+            height: 100px;
+            z-index: 15;
+            display: flex;
+            justify-content: center;
+            align-items: flex-end;
+        }
+
+        .candle-wrapper {
+            position: relative;
+            transform: translateX(15vw); /* Offset from center mullion */
+        }
+
+        @media (max-width: 768px) {
+            .candle-wrapper { transform: translateX(25vw); }
+        }
+
+        /* Almost at its end (short, melted wax) */
+        .wax {
+            width: 36px;
+            height: 25px;
+            background: linear-gradient(to right, #d4cfc5, #f5f0e6, #b8b3a8);
+            border-radius: 8px 8px 4px 4px;
+            position: relative;
+            box-shadow: inset 0 -5px 10px rgba(0,0,0,0.5), 0 5px 10px rgba(0,0,0,0.8);
+        }
+
+        /* Melted wax drip */
+        .wax::after {
+            content: '';
+            position: absolute;
+            top: 5px;
+            left: -4px;
+            width: 8px;
+            height: 18px;
+            background: #d4cfc5;
+            border-radius: 10px;
+        }
+        .wax::before {
+            content: '';
+            position: absolute;
+            top: 10px;
+            right: -3px;
+            width: 6px;
+            height: 12px;
+            background: #b8b3a8;
+            border-radius: 10px;
+        }
+
+        .wick {
+            width: 2px;
+            height: 8px;
+            background: #222;
+            position: absolute;
+            top: -6px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-radius: 2px;
+        }
+
+        /* The small, flickering flame */
+        .flame {
+            width: 12px;
+            height: 20px;
+            background: rgba(255, 220, 100, 0.9);
+            border-radius: 50% 50% 20% 20%;
+            position: absolute;
+            top: -24px;
+            left: 50%;
+            transform: translateX(-50%);
+            box-shadow: 
+                0 0 10px rgba(255, 200, 50, 0.8),
+                0 -5px 20px rgba(255, 120, 0, 0.6),
+                0 -10px 40px var(--candle-glow);
+            animation: flicker 0.15s infinite alternate;
+            transform-origin: bottom center;
+        }
+
+        .flame::after {
+            content: '';
+            position: absolute;
+            bottom: 2px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 6px;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.8);
+            border-radius: 50%;
+        }
+
+        @keyframes flicker {
+            0% { transform: translateX(-50%) scale(1) skewX(2deg); opacity: 0.9; box-shadow: 0 0 10px rgba(255, 200, 50, 0.8), 0 -5px 20px rgba(255, 120, 0, 0.6), 0 -10px 40px rgba(255, 140, 0, 0.3); }
+            50% { transform: translateX(-50%) scale(0.95) skewX(-1deg); opacity: 0.8; box-shadow: 0 0 8px rgba(255, 200, 50, 0.7), 0 -4px 15px rgba(255, 120, 0, 0.5), 0 -8px 30px rgba(255, 140, 0, 0.2); }
+            100% { transform: translateX(-50%) scale(1.05) skewX(1deg); opacity: 1; box-shadow: 0 0 12px rgba(255, 200, 50, 0.9), 0 -6px 25px rgba(255, 120, 0, 0.7), 0 -12px 50px rgba(255, 140, 0, 0.4); }
+        }
+
+        /* Light cast by the candle on the sill */
+        .candle-light-cast {
+            position: absolute;
+            bottom: -5px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 150px;
+            height: 40px;
+            background: radial-gradient(ellipse at center, rgba(255, 150, 50, 0.15) 0%, rgba(0,0,0,0) 70%);
+            border-radius: 50%;
+            z-index: -1;
+            animation: pulseLight 2s infinite alternate;
+        }
+
+        @keyframes pulseLight {
+            0% { opacity: 0.8; transform: translateX(-50%) scale(0.95); }
+            100% { opacity: 1; transform: translateX(-50%) scale(1.05); }
+        }
+
+        .poem-container {
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            left: 10vw;
+            width: 80vw;
+            max-width: 500px;
+            height: 70vh;
+            z-index: 30;
+            overflow-y: auto;
+            /* Hide scrollbar for aesthetics */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+            padding-right: 20px;
+            mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+            -webkit-mask-image: linear-gradient(to bottom, transparent, black 10%, black 90%, transparent);
+        }
+        
+        .poem-container::-webkit-scrollbar {
+            display: none;
+        }
+
+        .stanza {
+            margin-bottom: 2.5rem;
+        }
+
+        .line {
+            opacity: 0;
+            transform: translateY(15px);
+            transition: opacity 1.5s ease, transform 1.5s ease;
+            line-height: 1.6;
+            margin-bottom: 0.25rem;
+            text-shadow: 0 2px 10px rgba(0,0,0,0.8);
+        }
+        
+        .line.active {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        .emphasis {
+            font-style: italic;
+            color: rgba(255, 230, 180, 0.9); /* Slight warm tint for specific lines */
+        }
+
+        /* A subtle audio prompt indicator */
+        .scroll-prompt {
+            position: absolute;
+            bottom: 15vh;
+            left: 10vw;
+            font-size: 0.9rem;
+            color: rgba(255,255,255,0.4);
+            animation: pulsePrompt 3s infinite;
+            pointer-events: none;
+            z-index: 40;
+        }
+
+        @keyframes pulsePrompt {
+            0%, 100% { opacity: 0.2; }
+            50% { opacity: 0.6; }
+        }
+
+    </style>
+</head>
+<body>
+
+    <canvas id="sky-canvas"></canvas>
+    <div class="fog"></div>
+
+    <div class="window-container">
+        <div class="frame-top"></div>
+        <div class="frame-bottom"></div>
+        <div class="frame-left"></div>
+        <div class="frame-right"></div>
+        <div class="mullion"></div>
+        <div class="transom"></div>
+    </div>
+
+    <div class="sill-content">
+        <div class="candle-wrapper">
+            <div class="candle-light-cast"></div>
+            <div class="flame"></div>
+            <div class="wick"></div>
+            <div class="wax"></div>
+        </div>
+    </div>
+
+    <div class="scroll-prompt">Scroll to read gently...</div>
+
+    <div class="poem-container text-xl md:text-2xl" id="poem-container">
+        
+        <div class="h-[10vh]"></div> <!-- Spacer for scroll -->
+
+        <div class="stanza">
+            <div class="line">Starried sky, a flickering light.</div>
+            <div class="line">A grand blue moon among the stars,</div>
+            <div class="line">a feast for the eyes - a delight,</div>
+            <div class="line">but only when I share it with you.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line">I'm seeing you soon,</div>
+            <div class="line">but you're not yet in sight.</div>
+            <div class="line">You're the only one I want,</div>
+            <div class="line">my muse, who shines most at night.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line">I'll marry you one day,</div>
+            <div class="line">or maybe you'll go away.</div>
+            <div class="line">Moments like these make me think</div>
+            <div class="line">if I'll fuck it up like I did before.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line">I'm unsure if I'm likable.</div>
+            <div class="line">I hope I'm comfy and secure,</div>
+            <div class="line">I hope I'm a shade of pretty pink,</div>
+            <div class="line">Assertive and always pure.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line">Maybe a dim nightlight that still illuminates,</div>
+            <div class="line">a candle whose wick is small, but still burns.</div>
+            <div class="line">I feel small, so little within myself,</div>
+            <div class="line">but giving you what I have is all of me.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line emphasis">Home. A cozy corner. A warm embrace.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line">Missing you makes me feel empty -</div>
+            <div class="line text-lg md:text-xl">Like those days you wake up, but you're not too sure what for.</div>
+            <div class="line text-lg md:text-xl">I know it won't always feel like this, but I wish I could close the door.</div>
+        </div>
+
+        <div class="stanza">
+            <div class="line emphasis">I miss you.</div>
+        </div>
+
+        <div class="h-[30vh]"></div> <!-- Spacer for scroll -->
+    </div>
+
+    <script>
+        const canvas = document.getElementById('sky-canvas');
+        const ctx = canvas.getContext('2d');
+        
+        let width, height;
+        let stars = [];
+
+        function resize() {
+            width = window.innerWidth;
+            height = window.innerHeight;
+            canvas.width = width;
+            canvas.height = height;
+            initStars();
+        }
+
+        class Star {
+            constructor() {
+                this.x = Math.random() * width;
+                this.y = Math.random() * height;
+                this.size = Math.random() * 1.5;
+                this.baseAlpha = Math.random() * 0.5 + 0.1;
+                this.alpha = this.baseAlpha;
+                this.flickerSpeed = Math.random() * 0.02 + 0.005;
+                this.angle = Math.random() * Math.PI * 2;
+            }
+
+            update() {
+                this.angle += this.flickerSpeed;
+                // Sin wave for smooth fading in and out
+                this.alpha = this.baseAlpha + Math.sin(this.angle) * 0.2;
+                if(this.alpha < 0) this.alpha = 0;
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(255, 255, 255, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        function initStars() {
+            stars = [];
+            // More stars on larger screens
+            const numStars = Math.floor((width * height) / 3000);
+            for (let i = 0; i < numStars; i++) {
+                stars.push(new Star());
+            }
+        }
+
+        function animate() {
+            // Dark night sky background
+            let gradient = ctx.createLinearGradient(0, 0, 0, height);
+            gradient.addColorStop(0, '#02040a');
+            gradient.addColorStop(0.5, '#0b1120');
+            gradient.addColorStop(1, '#151e3f');
+            
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, width, height);
+
+            // Draw faint, grand blue moon (top right quadrant)
+            const moonX = width * 0.7;
+            const moonY = height * 0.3;
+            const moonRadius = Math.min(width, height) * 0.15;
+
+            // Moon Glow (Haze)
+            let moonGlow = ctx.createRadialGradient(moonX, moonY, moonRadius * 0.8, moonX, moonY, moonRadius * 4);
+            moonGlow.addColorStop(0, 'rgba(100, 150, 255, 0.15)');
+            moonGlow.addColorStop(1, 'rgba(100, 150, 255, 0)');
+            ctx.fillStyle = moonGlow;
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, moonRadius * 4, 0, Math.PI * 2);
+            ctx.fill();
+
+            // The Moon itself
+            ctx.fillStyle = 'rgba(170, 210, 255, 0.8)';
+            ctx.beginPath();
+            ctx.arc(moonX, moonY, moonRadius, 0, Math.PI * 2);
+            ctx.fill();
+
+            // Draw Stars
+            stars.forEach(star => {
+                star.update();
+                star.draw();
+            });
+
+            requestAnimationFrame(animate);
+        }
+
+        // Reveal text lines on scroll using Intersection Observer
+        const lines = document.querySelectorAll('.line');
+        const poemContainer = document.getElementById('poem-container');
+        const scrollPrompt = document.querySelector('.scroll-prompt');
+
+        const observerOptions = {
+            root: poemContainer,
+            rootMargin: '0px 0px -20% 0px', // Trigger slightly before it hits the bottom
+            threshold: 0.1
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('active');
+                }
+            });
+        }, observerOptions);
+
+        lines.forEach((line, index) => {
+            // Stagger the initial load for the first few lines
+            if(index < 4) {
+                setTimeout(() => {
+                    line.classList.add('active');
+                }, 1000 + (index * 800)); // Delay sequence
+            } else {
+                observer.observe(line);
+            }
+        });
+
+        // Hide prompt on scroll
+        poemContainer.addEventListener('scroll', () => {
+            if(poemContainer.scrollTop > 50) {
+                scrollPrompt.style.opacity = '0';
+                scrollPrompt.style.transition = 'opacity 1s ease';
+            }
+        });
+
+        // Initialization
+        window.addEventListener('resize', resize);
+        resize();
+        animate();
+
+    </script>
+</body>
+</html>
+```
